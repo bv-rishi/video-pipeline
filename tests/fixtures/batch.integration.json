@@ -1,0 +1,16 @@
+{
+  "batch_id": "editor-one-integration-test",
+  "editor": "editor-one",
+  "videos": [
+    {
+      "title": "Synthetic batch video one",
+      "video": "/tmp/video-pipeline-sample.mp4",
+      "script": "sample-script.txt"
+    },
+    {
+      "title": "Synthetic batch video two",
+      "video": "/tmp/video-pipeline-sample.mp4",
+      "script": "sample-script.txt"
+    }
+  ]
+}

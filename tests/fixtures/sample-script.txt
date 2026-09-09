@@ -1,0 +1,11 @@
+# Sample tutorial
+
+Welcome to this short test tutorial.
+
+## Step 1: Open the settings
+
+Open the settings screen and confirm that the feature is enabled.
+
+## Step 2: Save
+
+Select Save and confirm that the success message appears.

@@ -1,0 +1,23 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+dist/
+build/
+*.egg-info/
+
+# Local media, reports, models, and credentials must never be committed.
+.video-pipeline/
+jobs/
+batches/
+models/
+*.mp4
+*.mov
+*.mkv
+*.wav
+*.wpress
+.env
+config.toml
+relay-config.json

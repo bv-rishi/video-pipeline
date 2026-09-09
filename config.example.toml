@@ -1,0 +1,18 @@
+[video_pipeline]
+# All media, caches, and reports stay outside the cloned repository.
+work_dir = "~/Library/Application Support/Video Pipeline"
+whisper_model = "~/Models/ggml-base.en.bin"
+reviewer_label = "final reviewer"
+
+frame_interval_sec = 2.0
+chunk_length_sec = 300
+max_images_per_chunk = 18
+max_glm_calls_per_video = 6
+
+glm_base_url = "https://api.z.ai/api/paas/v4"
+glm_model = "glm-4.6v"
+
+# Keep secrets in environment variables or a private copy of this file.
+# glm_api_key = ""
+# relay_url = "https://private-relay.example/events"
+# relay_token = ""

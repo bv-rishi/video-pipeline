@@ -1,0 +1,9 @@
+{
+  "reviewer_user_id": "REPLACE_WITH_FINAL_REVIEWER_CHAT_USER_ID",
+  "reviewer_label": "final reviewer",
+  "editors": {
+    "editor-one": "REPLACE_WITH_EDITOR_ONE_CHAT_USER_ID",
+    "editor-two": "REPLACE_WITH_EDITOR_TWO_CHAT_USER_ID",
+    "editor-three": "REPLACE_WITH_EDITOR_THREE_CHAT_USER_ID"
+  }
+}

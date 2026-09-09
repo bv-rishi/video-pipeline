@@ -1,0 +1,16 @@
+{
+  "batch_id": "editor-one-2026-09-09-01",
+  "editor": "editor-one",
+  "videos": [
+    {
+      "title": "Example tutorial one",
+      "video": "/Users/editor/Videos/tutorial-one-draft.mp4",
+      "script": "/Users/editor/Scripts/tutorial-one.txt"
+    },
+    {
+      "title": "Example tutorial two",
+      "video": "/Users/editor/Videos/tutorial-two-draft.mp4",
+      "script": "/Users/editor/Scripts/tutorial-two.txt"
+    }
+  ]
+}
