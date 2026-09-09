@@ -9,6 +9,7 @@ import webbrowser
 
 from . import __version__
 from .config import Settings
+from .feedback import FeedbackError, record_feedback
 from .models import ReviewRequest
 from .relay import serve
 from .modules.draft_review import run_review
@@ -72,6 +73,14 @@ def build_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status", help="Show the local status of one batch")
     status.add_argument("--batch-id", required=True)
 
+    feedback = sub.add_parser("feedback", help="Record a private correction or approved review rule")
+    feedback.add_argument("--job-id", required=True)
+    feedback.add_argument("--kind", required=True, choices=("incorrect", "missed", "approved"))
+    feedback.add_argument("--scope", required=True, choices=("video", "draft-review", "shared"))
+    feedback.add_argument("--issue-id")
+    feedback.add_argument("--timestamp", type=float, dest="timestamp_sec")
+    feedback.add_argument("--note", help="Feedback text; prompts privately when omitted")
+
     relay = sub.add_parser("relay", help="Run the metadata-only Google Chat notification relay")
     relay.add_argument("--host", default="127.0.0.1")
     relay.add_argument("--port", type=int, default=8787)
@@ -126,10 +135,17 @@ def main(argv: list[str] | None = None) -> int:
                 "failed": state.get("failed", 0), "ready": state.get("ready", 0),
             }, indent=2))
             return 0
+        if args.command == "feedback":
+            note = args.note or input("Feedback: ")
+            record = record_feedback(settings, job_id=args.job_id, kind=args.kind, scope=args.scope,
+                                     note=note, issue_id=args.issue_id, timestamp_sec=args.timestamp_sec)
+            print(f"Feedback recorded privately: {record['feedback_id']}")
+            print(f"Scope: {record['scope']} · status: {record['status']}")
+            return 0
         if args.command == "relay":
             serve(args.host, args.port, Path(args.db).expanduser(), Path(args.relay_config).expanduser())
             return 0
-    except (BatchError, FileNotFoundError, RuntimeError, ValueError, json.JSONDecodeError) as error:
+    except (BatchError, FeedbackError, FileNotFoundError, RuntimeError, ValueError, json.JSONDecodeError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 2
     return 1

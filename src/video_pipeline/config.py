@@ -71,5 +71,5 @@ class Settings:
         return settings
 
     def ensure_dirs(self) -> None:
-        for child in ("jobs", "batches", "tools"):
+        for child in ("jobs", "batches", "feedback", "tools"):
             (self.work_dir / child).mkdir(parents=True, exist_ok=True)

@@ -94,6 +94,21 @@ Check the local counts at any time:
 video-pipeline status --batch-id editor-one-2026-09-09-01
 ```
 
+## Record improvements privately
+
+Corrections can apply to one video, the draft-review module, or the shared pipeline. For example:
+
+```bash
+video-pipeline feedback \
+  --job-id JOB_ID \
+  --kind incorrect \
+  --issue-id ISSUE-003 \
+  --scope draft-review \
+  --note "The relevant control was visible but covered by the presenter; classify this as obscured, not missing."
+```
+
+Use `--kind missed --timestamp 92` for an issue the reviewer failed to report. Feedback remains in the private local work directory. Shared behaviour changes still require a sanitized test and pull request.
+
 ## GLM command adapter
 
 If GLM is available through a local command rather than an API, configure an argument list as JSON. No shell is invoked.
