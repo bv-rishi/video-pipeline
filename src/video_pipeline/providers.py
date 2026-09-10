@@ -5,6 +5,7 @@ import hashlib
 import json
 import mimetypes
 from pathlib import Path
+import shutil
 import subprocess
 import time
 from typing import Any
@@ -181,9 +182,143 @@ class CommandProvider(BaseProvider):
         return issues, stored["usage"]
 
 
+ISSUE_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "issues": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "timestamp_sec": {"type": "number", "minimum": 0},
+                    "end_sec": {"type": ["number", "null"], "minimum": 0},
+                    "title": {"type": "string"},
+                    "problem": {"type": "string"},
+                    "fix": {"type": "string"},
+                    "severity": {"type": "string", "enum": ["required", "suggestion", "needs_decision"]},
+                    "category": {"type": "string"},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "evidence_frame": {"type": ["string", "null"]},
+                },
+                "required": ["timestamp_sec", "title", "problem", "fix", "severity", "category", "confidence"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["issues"],
+    "additionalProperties": False,
+}
+
+
+class ClaudeCodeProvider(BaseProvider):
+    """Use the user's existing Claude Code model routing without handling its credential."""
+
+    name = "claude-code"
+
+    def __init__(self, settings: Settings, text_only: bool = False):
+        executable = shutil.which(settings.claude_code_command)
+        if not executable:
+            raise ProviderError(f"Claude Code command is not installed: {settings.claude_code_command}")
+        self.settings = settings
+        self.executable = executable
+        self.text_only = text_only
+        self.model = settings.claude_code_model
+
+    def signature(self, system_prompt: str, prompt: str, images: list[Path]) -> str:
+        base = super().signature(system_prompt, prompt, images)
+        return hashlib.sha256(
+            f"{base}:text_only={self.text_only}:budget={self.settings.claude_code_max_budget_usd}".encode()
+        ).hexdigest()
+
+    def review(self, system_prompt: str, prompt: str, images: list[Path], cache_path: Path) -> tuple[list[Issue], dict[str, Any]]:
+        signature = self.signature(system_prompt, prompt, images)
+        if cache_path.exists():
+            cached = read_json(cache_path, {})
+            if cached.get("signature") == signature:
+                return parse_issues(cached.get("response", cached), self.name), {**cached.get("usage", {}), "cached": True}
+
+        usable_images = [path.resolve() for path in images if path.exists()] if not self.text_only else []
+        model_prompt = prompt
+        if usable_images:
+            model_prompt += "\n\nLOCAL EVIDENCE IMAGES (read only these files):\n" + "\n".join(
+                f"- {path}" for path in usable_images
+            )
+
+        args = [
+            self.executable,
+            "--print",
+            "--output-format", "json",
+            "--json-schema", json.dumps(ISSUE_RESPONSE_SCHEMA, separators=(",", ":")),
+            "--no-session-persistence",
+            "--disable-slash-commands",
+            "--no-chrome",
+            "--setting-sources", "user",
+            "--permission-mode", "dontAsk",
+            "--model", self.model,
+            "--max-budget-usd", str(self.settings.claude_code_max_budget_usd),
+            "--system-prompt", system_prompt,
+        ]
+        if usable_images:
+            args.extend(["--tools", "Read", "--allowedTools", "Read"])
+            for directory in sorted({str(path.parent) for path in usable_images}):
+                args.extend(["--add-dir", directory])
+        else:
+            args.extend(["--tools", ""])
+
+        result = subprocess.run(
+            args,
+            input=model_prompt,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=self.settings.glm_timeout_sec,
+            check=False,
+            cwd=cache_path.parent,
+        )
+        if result.returncode:
+            detail = result.stderr.strip()[-500:] or result.stdout.strip()[-500:]
+            raise ProviderError(f"Claude Code exited with {result.returncode}: {detail}")
+        try:
+            envelope = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise ProviderError(f"Claude Code did not return its JSON result envelope: {error}") from error
+        if envelope.get("is_error"):
+            raise ProviderError(f"Claude Code reported an error: {envelope.get('result', 'unknown error')}")
+        answer = envelope.get("structured_output")
+        if answer is None:
+            answer = envelope.get("result", envelope)
+        issues = parse_issues(answer, self.name)
+        raw_usage = envelope.get("usage", {}) if isinstance(envelope, dict) else {}
+        usage = {
+            "calls": 1,
+            "cached": False,
+            "prompt_tokens": int(raw_usage.get("input_tokens", raw_usage.get("prompt_tokens", 0)) or 0),
+            "completion_tokens": int(raw_usage.get("output_tokens", raw_usage.get("completion_tokens", 0)) or 0),
+        }
+        usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
+        stored = {
+            "response": {"issues": [item.to_dict() for item in issues]},
+            "usage": usage,
+            "model": envelope.get("model", self.model) if isinstance(envelope, dict) else self.model,
+            "signature": signature,
+        }
+        write_json(cache_path, stored)
+        return issues, usage
+
+
 def make_provider(name: str, settings: Settings, text_only: bool = False) -> BaseProvider:
+    if name == "auto":
+        if shutil.which(settings.claude_code_command):
+            return ClaudeCodeProvider(settings, text_only=text_only)
+        if settings.glm_api_key:
+            return OpenAICompatibleProvider(settings, text_only=text_only)
+        if settings.glm_command:
+            return CommandProvider(settings)
+        raise ProviderError("No model provider is configured. Install Claude Code, configure the GLM API, or use --provider mock.")
     if name == "mock":
         return MockProvider()
+    if name == "claude-code":
+        return ClaudeCodeProvider(settings, text_only=text_only)
     if name == "command":
         return CommandProvider(settings)
     if name in {"glm", "openai-compatible"}:

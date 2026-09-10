@@ -4,9 +4,10 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 
 from video_pipeline.config import Settings
-from video_pipeline.providers import OpenAICompatibleProvider, ProviderError, parse_issues
+from video_pipeline.providers import ClaudeCodeProvider, OpenAICompatibleProvider, ProviderError, make_provider, parse_issues
 
 
 class ProviderTests(unittest.TestCase):
@@ -69,6 +70,70 @@ class ProviderTests(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
+
+    def test_claude_code_uses_existing_route_with_read_only_images(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            image = root / "frame 001.jpg"
+            image.write_bytes(b"safe fixture")
+            response = {
+                "is_error": False,
+                "structured_output": {"issues": [{
+                    "timestamp_sec": 18,
+                    "end_sec": None,
+                    "title": "Zoom into the setting",
+                    "problem": "The setting is too small to read.",
+                    "fix": "Crop closer and highlight it.",
+                    "severity": "required",
+                    "category": "visual",
+                    "confidence": 0.92,
+                    "evidence_frame": image.name,
+                }]},
+                "usage": {"input_tokens": 20, "output_tokens": 10},
+            }
+            completed = __import__("subprocess").CompletedProcess(
+                args=[], returncode=0, stdout=json.dumps(response), stderr=""
+            )
+            settings = Settings(
+                claude_code_command="claude",
+                claude_code_model="sonnet",
+                claude_code_max_budget_usd=0.05,
+            )
+            with patch("video_pipeline.providers.shutil.which", return_value="/usr/local/bin/claude"), \
+                    patch("video_pipeline.providers.subprocess.run", return_value=completed) as run:
+                provider = ClaudeCodeProvider(settings)
+                issues, usage = provider.review("system", "prompt", [image], root / "cache.json")
+
+            self.assertEqual(len(issues), 1)
+            self.assertEqual(usage["total_tokens"], 30)
+            args = run.call_args.args[0]
+            self.assertIn("--no-session-persistence", args)
+            self.assertIn("--max-budget-usd", args)
+            self.assertEqual(args[args.index("--tools") + 1], "Read")
+            self.assertEqual(args[args.index("--allowedTools") + 1], "Read")
+            self.assertIn(str(image.resolve()), run.call_args.kwargs["input"])
+            self.assertNotIn(str(image.resolve()), " ".join(args))
+
+    def test_claude_code_text_only_disables_all_tools(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            completed = __import__("subprocess").CompletedProcess(
+                args=[], returncode=0, stdout=json.dumps({"structured_output": {"issues": []}}), stderr=""
+            )
+            settings = Settings()
+            with patch("video_pipeline.providers.shutil.which", return_value="/usr/local/bin/claude"), \
+                    patch("video_pipeline.providers.subprocess.run", return_value=completed) as run:
+                provider = ClaudeCodeProvider(settings, text_only=True)
+                provider.review("system", "prompt", [], root / "cache.json")
+            args = run.call_args.args[0]
+            self.assertEqual(args[args.index("--tools") + 1], "")
+            self.assertNotIn("--allowedTools", args)
+
+    def test_auto_prefers_existing_claude_code_setup(self):
+        settings = Settings(glm_api_key="also-configured")
+        with patch("video_pipeline.providers.shutil.which", return_value="/usr/local/bin/claude"):
+            provider = make_provider("auto", settings)
+        self.assertIsInstance(provider, ClaudeCodeProvider)
 
 
 if __name__ == "__main__":

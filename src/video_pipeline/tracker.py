@@ -28,7 +28,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return value
 
 
-def run_batch(manifest_path: Path, settings: Settings, *, provider_name: str = "glm",
+def run_batch(manifest_path: Path, settings: Settings, *, provider_name: str = "auto",
               text_only: bool = False, skip_transcript: bool = False, skip_ocr: bool = False) -> tuple[dict[str, Any], Path]:
     manifest = load_manifest(manifest_path)
     manifest_dir = manifest_path.resolve().parent

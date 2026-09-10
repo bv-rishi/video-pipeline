@@ -9,6 +9,13 @@ chunk_length_sec = 300
 max_images_per_chunk = 18
 max_glm_calls_per_video = 6
 
+# Default: reuse the model route already configured in Claude Code. When the
+# Claude Code aliases point to GLM, "sonnet" is resolved through that mapping.
+claude_code_command = "claude"
+claude_code_model = "sonnet"
+claude_code_max_budget_usd = 0.10
+
+# Optional direct GLM API route. This is used with --provider glm.
 glm_base_url = "https://api.z.ai/api/paas/v4"
 glm_model = "glm-4.6v"
 

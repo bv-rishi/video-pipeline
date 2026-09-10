@@ -24,6 +24,7 @@ fi
 
 print ""
 print "Video Pipeline is installed."
-print "Edit $config_dir/config.toml with the local Whisper model path and GLM settings."
+print "Edit $config_dir/config.toml with the local Whisper model path."
+print "If Claude Code already uses GLM, the reviewer will reuse that setup automatically."
 print "Then run scripts/run-batch.command and drag a private batch JSON file into the window."
 read "?Press Return to close."

@@ -21,6 +21,7 @@ def _settings(args: argparse.Namespace) -> Settings:
 
 
 def doctor(settings: Settings) -> int:
+    claude_code = bool(shutil.which(settings.claude_code_command))
     checks = {
         "Python 3.11+": sys.version_info >= (3, 11),
         "FFmpeg": bool(shutil.which("ffmpeg")),
@@ -28,15 +29,15 @@ def doctor(settings: Settings) -> int:
         "whisper-cli": bool(shutil.which("whisper-cli")),
         "Swift compiler": bool(shutil.which("swiftc")),
         "Whisper model": bool(settings.whisper_model and settings.whisper_model.exists()),
-        "GLM API or command": bool(settings.glm_api_key or settings.glm_command),
+        "Claude Code / GLM provider": bool(claude_code or settings.glm_api_key or settings.glm_command),
     }
     for label, okay in checks.items():
         print(f"{'OK' if okay else 'MISSING':8} {label}")
     print(f"\nLocal work directory: {settings.work_dir}")
     if not checks["Whisper model"]:
         print("Set VIDEO_PIPELINE_WHISPER_MODEL to an existing whisper.cpp model file.")
-    if not checks["GLM API or command"]:
-        print("Set the GLM API variables or VIDEO_PIPELINE_GLM_COMMAND_JSON. Use --provider mock only for testing.")
+    if not checks["Claude Code / GLM provider"]:
+        print("Install/configure Claude Code, set the GLM API variables, or use --provider mock only for testing.")
     return 0 if all(checks.values()) else 1
 
 
@@ -53,7 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--script", required=True)
     review.add_argument("--editor", required=True, help="Editor key from the private team configuration")
     review.add_argument("--title")
-    review.add_argument("--provider", default="glm", choices=("glm", "command", "mock"))
+    provider_choices = ("auto", "claude-code", "glm", "command", "mock")
+    review.add_argument("--provider", default="auto", choices=provider_choices)
     review.add_argument("--text-only", action="store_true", help="Do not send screenshots to a cloud model")
     review.add_argument("--skip-transcript", action="store_true", help=argparse.SUPPRESS)
     review.add_argument("--skip-ocr", action="store_true", help=argparse.SUPPRESS)
@@ -62,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     batch = sub.add_parser("batch", help="Review every video in a batch manifest")
     batch.add_argument("manifest")
-    batch.add_argument("--provider", default="glm", choices=("glm", "command", "mock"))
+    batch.add_argument("--provider", default="auto", choices=provider_choices)
     batch.add_argument("--text-only", action="store_true")
     batch.add_argument("--skip-transcript", action="store_true", help=argparse.SUPPRESS)
     batch.add_argument("--skip-ocr", action="store_true", help=argparse.SUPPRESS)

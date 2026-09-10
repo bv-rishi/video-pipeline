@@ -10,7 +10,7 @@ The first working module is `draft-review`. It:
 
 - reads an approved script and local video;
 - extracts media facts, audio, transcript, and screen text locally;
-- sends compact evidence to a configured GLM endpoint or command;
+- sends compact evidence through the GLM route already configured in Claude Code, or through a direct endpoint/command;
 - writes local JSON, Markdown, and HTML reports;
 - resumes completed analysis instead of repeating it;
 - runs several videos as one batch;
@@ -48,7 +48,16 @@ Point the reviewer at an existing Whisper model:
 export VIDEO_PIPELINE_WHISPER_MODEL="/absolute/path/to/ggml-base.en.bin"
 ```
 
-Configure GLM using its OpenAI-compatible API:
+If Claude Code already uses GLM on the Mac, no second API key is needed. The default `auto` provider uses the existing Claude Code setup, passes the review through standard input, disables all tools except read-only access to the selected evidence screenshots, and does not preserve a Claude session. The default ceiling is $0.10 per model call and six calls per video; both are configurable.
+
+```bash
+export VIDEO_PIPELINE_CLAUDE_MODEL="sonnet"
+export VIDEO_PIPELINE_CLAUDE_MAX_BUDGET_USD="0.10"
+```
+
+The `sonnet` alias is deliberate: Claude Code resolves it through the model mapping in the user's private settings, which can point to GLM. If Claude Code is not installed, `auto` falls back to the direct GLM API and then the generic command adapter.
+
+To use GLM's OpenAI-compatible API directly instead:
 
 ```bash
 export VIDEO_PIPELINE_GLM_API_KEY="your-key"
@@ -56,7 +65,7 @@ export VIDEO_PIPELINE_GLM_BASE_URL="https://api.z.ai/api/paas/v4"
 export VIDEO_PIPELINE_GLM_MODEL="glm-4.6v"
 ```
 
-The base URL and model are configurable because normal GLM and GLM Coding plans can use different endpoints and image support. Never add the key to this repository. The default ceiling is six GLM calls per video; change it with `VIDEO_PIPELINE_MAX_GLM_CALLS` only after checking the expected cost and video length.
+The base URL and model are configurable because normal GLM and GLM Coding plans can use different endpoints and image support. Never add the key to this repository. Change `VIDEO_PIPELINE_MAX_GLM_CALLS` only after checking the expected cost and video length.
 
 Run one review:
 

@@ -49,7 +49,7 @@ def _chunk_prompt(title: str, script: str, media: dict[str, Any], frames: list[d
     return prompt, images
 
 
-def run_review(request: ReviewRequest, settings: Settings, *, provider_name: str = "glm",
+def run_review(request: ReviewRequest, settings: Settings, *, provider_name: str = "auto",
                text_only: bool = False, skip_transcript: bool = False, skip_ocr: bool = False,
                force: bool = False) -> tuple[ReviewResult, Path]:
     for path, label in ((request.video, "video"), (request.script, "script")):

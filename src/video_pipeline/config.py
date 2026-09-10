@@ -24,6 +24,9 @@ class Settings:
     glm_max_retries: int = 2
     max_glm_calls_per_video: int = 6
     glm_command: list[str] | None = None
+    claude_code_command: str = "claude"
+    claude_code_model: str = "sonnet"
+    claude_code_max_budget_usd: float = 0.10
     relay_url: str = ""
     relay_token: str = ""
     reviewer_label: str = "final reviewer"
@@ -58,6 +61,12 @@ class Settings:
             glm_max_retries=int(env.get("VIDEO_PIPELINE_GLM_RETRIES") or values.get("glm_max_retries", 2)),
             max_glm_calls_per_video=int(env.get("VIDEO_PIPELINE_MAX_GLM_CALLS") or values.get("max_glm_calls_per_video", 6)),
             glm_command=command,
+            claude_code_command=env.get("VIDEO_PIPELINE_CLAUDE_COMMAND") or values.get("claude_code_command", "claude"),
+            claude_code_model=env.get("VIDEO_PIPELINE_CLAUDE_MODEL") or values.get("claude_code_model", "sonnet"),
+            claude_code_max_budget_usd=float(
+                env.get("VIDEO_PIPELINE_CLAUDE_MAX_BUDGET_USD")
+                or values.get("claude_code_max_budget_usd", 0.10)
+            ),
             relay_url=env.get("VIDEO_PIPELINE_RELAY_URL") or values.get("relay_url", ""),
             relay_token=env.get("VIDEO_PIPELINE_RELAY_TOKEN") or values.get("relay_token", ""),
             reviewer_label=env.get("VIDEO_PIPELINE_REVIEWER_LABEL") or values.get("reviewer_label", "final reviewer"),
@@ -68,6 +77,8 @@ class Settings:
             raise ValueError("chunk_length_sec and max_images_per_chunk must be greater than zero")
         if settings.max_glm_calls_per_video <= 0:
             raise ValueError("max_glm_calls_per_video must be greater than zero")
+        if settings.claude_code_max_budget_usd <= 0:
+            raise ValueError("claude_code_max_budget_usd must be greater than zero")
         return settings
 
     def ensure_dirs(self) -> None:
