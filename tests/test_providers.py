@@ -6,8 +6,14 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from video_pipeline.config import Settings
-from video_pipeline.providers import ClaudeCodeProvider, OpenAICompatibleProvider, ProviderError, make_provider, parse_issues
+from video_pipeline.modules.draft_review.config import DraftReviewSettings, ReviewAgentSettings
+from video_pipeline.modules.draft_review.providers import (
+    ClaudeCodeProvider,
+    OpenAICompatibleProvider,
+    ProviderError,
+    make_provider,
+    parse_issues,
+)
 
 
 class ProviderTests(unittest.TestCase):
@@ -24,7 +30,7 @@ class ProviderTests(unittest.TestCase):
         with self.assertRaises(ProviderError):
             parse_issues("not json")
 
-    def test_openai_compatible_glm_payload_and_cache(self):
+    def test_openai_compatible_payload_and_cache(self):
         received = []
 
         class Handler(BaseHTTPRequestHandler):
@@ -39,7 +45,7 @@ class ProviderTests(unittest.TestCase):
                     "fix": "Move the presenter", "severity": "required", "category": "visual",
                     "confidence": 0.9, "evidence_frame": "frame.jpg",
                 }]})
-                payload = json.dumps({"model": "glm-test", "choices": [{"message": {"content": answer}}],
+                payload = json.dumps({"model": "compatible-test", "choices": [{"message": {"content": answer}}],
                                       "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -55,8 +61,10 @@ class ProviderTests(unittest.TestCase):
                 root = Path(directory)
                 image = root / "frame.jpg"
                 image.write_bytes(b"safe fixture")
-                settings = Settings(glm_base_url=f"http://127.0.0.1:{server.server_port}/v4",
-                                    glm_api_key="test-key", glm_model="glm-test", glm_max_retries=0)
+                settings = DraftReviewSettings(agent=ReviewAgentSettings(
+                    api_base_url=f"http://127.0.0.1:{server.server_port}/v4",
+                    api_key="test-key", api_model="compatible-test", max_retries=0,
+                ))
                 provider = OpenAICompatibleProvider(settings)
                 issues, usage = provider.review("system", "prompt", [image], root / "cache.json")
                 cached_issues, cached_usage = provider.review("system", "prompt", [image], root / "cache.json")
@@ -94,13 +102,13 @@ class ProviderTests(unittest.TestCase):
             completed = __import__("subprocess").CompletedProcess(
                 args=[], returncode=0, stdout=json.dumps(response), stderr=""
             )
-            settings = Settings(
+            settings = DraftReviewSettings(agent=ReviewAgentSettings(
                 claude_code_command="claude",
                 claude_code_model="sonnet",
                 claude_code_max_budget_usd=0.05,
-            )
-            with patch("video_pipeline.providers.shutil.which", return_value="/usr/local/bin/claude"), \
-                    patch("video_pipeline.providers.subprocess.run", return_value=completed) as run:
+            ))
+            with patch("video_pipeline.modules.draft_review.providers.shutil.which", return_value="/usr/local/bin/claude"), \
+                    patch("video_pipeline.modules.draft_review.providers.subprocess.run", return_value=completed) as run:
                 provider = ClaudeCodeProvider(settings)
                 issues, usage = provider.review("system", "prompt", [image], root / "cache.json")
 
@@ -120,9 +128,9 @@ class ProviderTests(unittest.TestCase):
             completed = __import__("subprocess").CompletedProcess(
                 args=[], returncode=0, stdout=json.dumps({"structured_output": {"issues": []}}), stderr=""
             )
-            settings = Settings()
-            with patch("video_pipeline.providers.shutil.which", return_value="/usr/local/bin/claude"), \
-                    patch("video_pipeline.providers.subprocess.run", return_value=completed) as run:
+            settings = DraftReviewSettings()
+            with patch("video_pipeline.modules.draft_review.providers.shutil.which", return_value="/usr/local/bin/claude"), \
+                    patch("video_pipeline.modules.draft_review.providers.subprocess.run", return_value=completed) as run:
                 provider = ClaudeCodeProvider(settings, text_only=True)
                 provider.review("system", "prompt", [], root / "cache.json")
             args = run.call_args.args[0]
@@ -130,8 +138,8 @@ class ProviderTests(unittest.TestCase):
             self.assertNotIn("--allowedTools", args)
 
     def test_auto_prefers_existing_claude_code_setup(self):
-        settings = Settings(glm_api_key="also-configured")
-        with patch("video_pipeline.providers.shutil.which", return_value="/usr/local/bin/claude"):
+        settings = DraftReviewSettings(agent=ReviewAgentSettings(api_key="also-configured"))
+        with patch("video_pipeline.modules.draft_review.providers.shutil.which", return_value="/usr/local/bin/claude"):
             provider = make_provider("auto", settings)
         self.assertIsInstance(provider, ClaudeCodeProvider)
 

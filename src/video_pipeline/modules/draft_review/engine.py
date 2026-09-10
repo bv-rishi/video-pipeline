@@ -8,10 +8,11 @@ from typing import Any
 from ...config import Settings
 from ...media import analyse_media, collapse_screen_states
 from ...models import Issue, ReviewRequest, ReviewResult
-from ...providers import ProviderError, make_provider
 from ...report import write_reports
 from .prompt import SYSTEM_PROMPT
 from .rules import deduplicate_issues, deterministic_issues
+from .config import DraftReviewSettings
+from .providers import ProviderError, make_provider
 from ...util import read_json, sha256_file, slugify, utc_now, write_json
 
 
@@ -76,31 +77,37 @@ def run_review(request: ReviewRequest, settings: Settings, *, provider_name: str
         "batch_id": request.batch_id, "status": "running", "created_at": started,
     })
     script = request.script.read_text(encoding="utf-8")
+    review_settings = DraftReviewSettings.from_core(settings)
     media, warnings = analyse_media(request.video, job_dir, settings,
                                     skip_transcript=skip_transcript, skip_ocr=skip_ocr)
     media["frame_dir"] = str(job_dir / "analysis" / "frames")
     issues = deterministic_issues(media, script)
 
-    provider = make_provider(provider_name, settings, text_only=text_only)
+    provider = make_provider(provider_name, review_settings, text_only=text_only)
     duration = float(media.get("duration_sec") or 0)
-    total_chunks = max(1, int((duration + settings.chunk_length_sec - 1) // settings.chunk_length_sec))
+    total_chunks = max(1, int((duration + review_settings.chunk_length_sec - 1) // review_settings.chunk_length_sec))
     usage: dict[str, Any] = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_calls": 0}
     chunk_failures = 0
-    chunks_to_run = min(total_chunks, settings.max_glm_calls_per_video)
+    chunks_to_run = min(total_chunks, review_settings.max_agent_calls_per_video)
     if chunks_to_run < total_chunks:
         chunk_failures += total_chunks - chunks_to_run
         warnings.append(
-            f"GLM review stopped at the configured limit of {settings.max_glm_calls_per_video} calls; "
-            f"{total_chunks - chunks_to_run} video chunk(s) were not model-reviewed."
+            f"Agent review stopped at the configured limit of {review_settings.max_agent_calls_per_video} calls; "
+            f"{total_chunks - chunks_to_run} video chunk(s) were not agent-reviewed."
+        )
+    if not provider.semantic_complete:
+        warnings.append(
+            "Semantic review has not run. Deterministic analysis and agent task bundles are ready, "
+            "but an agent must complete them before this review can be marked complete."
         )
     valid_frames = {item.get("frame") for item in media.get("ocr", [])}
     for chunk_index in range(chunks_to_run):
-        start = chunk_index * settings.chunk_length_sec
-        end = min(duration, (chunk_index + 1) * settings.chunk_length_sec) if duration else settings.chunk_length_sec
+        start = chunk_index * review_settings.chunk_length_sec
+        end = min(duration, (chunk_index + 1) * review_settings.chunk_length_sec) if duration else review_settings.chunk_length_sec
         raw_frames = [item for item in media.get("ocr", []) if start <= float(item.get("time_sec", 0)) < end]
-        frames = collapse_screen_states(raw_frames, settings.max_images_per_chunk)
+        frames = collapse_screen_states(raw_frames, review_settings.max_images_per_chunk)
         prompt, images = _chunk_prompt(request.title, script, media, frames, start, end, chunk_index, total_chunks)
-        cache_path = job_dir / "analysis" / f"glm-chunk-{chunk_index:03d}.json"
+        cache_path = job_dir / "analysis" / f"agent-chunk-{chunk_index:03d}.json"
         try:
             model_issues, chunk_usage = provider.review(SYSTEM_PROMPT, prompt, images, cache_path)
             for item in model_issues:
@@ -115,9 +122,11 @@ def run_review(request: ReviewRequest, settings: Settings, *, provider_name: str
                 usage["calls"] += int(chunk_usage.get("calls", 1))
             for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
                 usage[key] += int(chunk_usage.get(key, 0) or 0)
+            if chunk_usage.get("semantic_complete") is False:
+                chunk_failures += 1
         except ProviderError as error:
             chunk_failures += 1
-            warnings.append(f"GLM chunk {chunk_index + 1} could not be reviewed: {error}")
+            warnings.append(f"Agent chunk {chunk_index + 1} could not be reviewed: {error}")
 
     completed = utc_now()
     status = "needs_attention" if chunk_failures else "review_complete"

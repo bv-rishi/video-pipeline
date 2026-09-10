@@ -25,7 +25,7 @@ def _markdown(result: ReviewResult) -> str:
         "", "## Timestamped findings", "",
     ]
     if not result.issues:
-        lines.extend(["No supported issues were returned. Check the warnings and confirm that transcription, OCR, and GLM all ran.", ""])
+        lines.extend(["No supported issues were returned. Check the warnings and confirm that transcription, OCR, and the selected agent stage all ran.", ""])
     for issue in result.issues:
         lines.extend([
             f"### {timestamp(issue.timestamp_sec)} — {issue.title}", "",

@@ -97,7 +97,7 @@ def transcribe(audio: Path, job_dir: Path, settings: Settings) -> tuple[list[dic
     run([
         whisper, "-m", str(settings.whisper_model), "-f", str(audio), "-l", "en",
         "-ojf", "-osrt", "-of", str(prefix), "-np",
-    ], timeout=max(600, settings.glm_timeout_sec))
+    ], timeout=3600)
     if not output.exists():
         raise MediaError("whisper-cli finished without creating transcript.json")
     return _transcript_segments(read_json(output, {})), warnings

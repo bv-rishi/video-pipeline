@@ -1,25 +1,41 @@
 # Video Pipeline
 
-Video Pipeline is a local-first quality-control system for tutorial videos. Editors run it on their Macs, review timestamped findings, make the changes, and mark the batch ready for the final reviewer.
+Video Pipeline is a public, local-first toolkit for producing and checking tutorial videos. Editors choose only the module they need. Raw videos stay on their Macs.
 
-Raw videos stay on the editor's Mac. A small optional relay receives counts and status only so it can notify a private Google Chat space.
+The repository does not require GLM, Codex, Claude Code, or any other specific model. A module can use the agent already available on that computer, connect through a compatible API, invoke a configured local command, or prepare evidence without an agent.
 
-## Current module
+## Independent modules
 
-The first working module is `draft-review`. It:
+### `draft-review`
 
-- reads an approved script and local video;
-- extracts media facts, audio, transcript, and screen text locally;
-- sends compact evidence through the GLM route already configured in Claude Code, or through a direct endpoint/command;
-- writes local JSON, Markdown, and HTML reports;
-- resumes completed analysis instead of repeating it;
-- runs several videos as one batch;
-- lets the editor confirm that requested changes are complete;
-- sends metadata-only batch notifications through an optional private relay.
+This is the first production module. It checks an edited tutorial against its approved script and the channel's editing standards. It:
 
-The A-roll conformer and screen-matching modules are represented in the shared architecture and will be promoted from the existing benchmarks after this workflow is stable.
+- extracts media facts, audio, transcript and screen text locally;
+- runs deterministic checks;
+- prepares compact, timestamped evidence for an optional agent;
+- writes local JSON, Markdown and HTML reports;
+- resumes completed work instead of repeating it;
+- handles several videos as a batch;
+- lets the editor confirm the requested changes are complete.
 
-## Quick start on macOS
+Run it directly with `video-draft-review`, or keep using the compatible `video-pipeline review` and `video-pipeline batch` commands.
+
+### `conformer`
+
+This module will select host takes against the exact script, retrieve the corresponding screen footage, and generate a prepared Final Cut timeline. A-roll alignment and screen matching are components of this one module.
+
+The current repository contains the module boundary and sanitized benchmark results. It does not yet claim to contain the production conformer.
+
+Inspect available modules:
+
+```bash
+video-pipeline modules
+video-conformer status
+```
+
+See [docs/modules.md](docs/modules.md) for the boundaries and current status.
+
+## Install on macOS
 
 Requirements:
 
@@ -40,72 +56,86 @@ python -m pip install -e .
 video-pipeline doctor
 ```
 
-Editors can also double-click `scripts/install-macos.command`, then use `scripts/run-batch.command` and drag a private batch JSON file into the Terminal window. The installer creates a private configuration at `~/.config/video-pipeline/config.toml`.
+Editors can also double-click `scripts/install-macos.command`. The installer creates a private configuration at `~/.config/video-pipeline/config.toml`.
 
-Point the reviewer at an existing Whisper model:
+Point the local media layer at an existing Whisper model:
 
 ```bash
 export VIDEO_PIPELINE_WHISPER_MODEL="/absolute/path/to/ggml-base.en.bin"
 ```
 
-If Claude Code already uses GLM on the Mac, no second API key is needed. The default `auto` provider uses the existing Claude Code setup, passes the review through standard input, disables all tools except read-only access to the selected evidence screenshots, and does not preserve a Claude session. The default ceiling is $0.10 per model call and six calls per video; both are configurable.
+## Choose an agent per module
+
+Agent configuration belongs to a module, not the shared pipeline. `draft-review` currently supports:
+
+- `auto`: use the module's private preference, then a configured command, Claude Code, a compatible API, or evidence-only mode;
+- `command`: invoke any argument-array wrapper that follows the [agent task contract](docs/agent-contract.md);
+- `claude-code`: use the model route in the editor's private Claude Code settings;
+- `openai-compatible`: call a privately configured compatible endpoint;
+- `none`: finish local analysis, save agent task bundles, and mark semantic review as pending.
+
+Examples:
 
 ```bash
-export VIDEO_PIPELINE_CLAUDE_MODEL="sonnet"
-export VIDEO_PIPELINE_CLAUDE_MAX_BUDGET_USD="0.10"
-```
-
-The `sonnet` alias is deliberate: Claude Code resolves it through the model mapping in the user's private settings, which can point to GLM. If Claude Code is not installed, `auto` falls back to the direct GLM API and then the generic command adapter.
-
-To use GLM's OpenAI-compatible API directly instead:
-
-```bash
-export VIDEO_PIPELINE_GLM_API_KEY="your-key"
-export VIDEO_PIPELINE_GLM_BASE_URL="https://api.z.ai/api/paas/v4"
-export VIDEO_PIPELINE_GLM_MODEL="glm-4.6v"
-```
-
-The base URL and model are configurable because normal GLM and GLM Coding plans can use different endpoints and image support. Never add the key to this repository. Change `VIDEO_PIPELINE_MAX_GLM_CALLS` only after checking the expected cost and video length.
-
-Run one review:
-
-```bash
-video-pipeline review \
+video-draft-review review \
   --video "/absolute/path/to/draft.mp4" \
   --script "/absolute/path/to/script.txt" \
   --editor editor-one \
-  --title "Tutorial title"
+  --title "Tutorial title" \
+  --agent auto
+
+video-draft-review review \
+  --video "/absolute/path/to/draft.mp4" \
+  --script "/absolute/path/to/script.txt" \
+  --editor editor-one \
+  --agent none
 ```
 
-Reports are written under `~/Library/Application Support/Video Pipeline/jobs/` by default. Open `report.html` in a browser.
+The second command still creates transcripts, OCR, deterministic findings and versioned agent request bundles. Its status is `needs_attention`, because no semantic reviewer ran.
+
+### Generic command adapter
+
+Configure an argument list as JSON. No shell is invoked:
+
+```bash
+export VIDEO_PIPELINE_DRAFT_REVIEW_AGENT_COMMAND_JSON='["my-agent-wrapper", "{request_file}", "{response_file}"]'
+video-draft-review review ... --agent command
+```
+
+The wrapper can use Codex, Claude Code, GLM, a local model, or another agent. The module only cares that the wrapper reads the request and writes schema-valid JSON.
+
+### Compatible API adapter
+
+```bash
+export VIDEO_PIPELINE_DRAFT_REVIEW_API_KEY="your-key"
+export VIDEO_PIPELINE_DRAFT_REVIEW_API_BASE_URL="https://provider.example/v1"
+export VIDEO_PIPELINE_DRAFT_REVIEW_API_MODEL="configured-model"
+video-draft-review review ... --agent openai-compatible
+```
+
+Legacy `VIDEO_PIPELINE_GLM_*` and `VIDEO_PIPELINE_CLAUDE_*` review settings remain accepted during the 0.2 transition. New installations should use the module-scoped names in `config.example.toml`.
 
 ## Run a batch
 
 Copy `examples/batch.example.json` outside the repository, replace the example paths, and run:
 
 ```bash
-video-pipeline batch /absolute/path/to/editor-one-batch.json
+video-draft-review batch /absolute/path/to/editor-one-batch.json --agent auto
 ```
 
-The runner records progress after every video. Running the same command again resumes the batch and reuses cached media analysis and GLM responses.
+The runner records progress after every video. Running the same command again resumes the batch and reuses unchanged local analysis and agent responses.
 
-After the editor has made the requested changes:
+After the editor makes the requested changes:
 
 ```bash
 video-pipeline ready --batch-id editor-one-2026-09-09-01
 ```
 
-This is an editor confirmation. Version 0.1 does not automatically recheck the revised video.
-
-Check the local counts at any time:
-
-```bash
-video-pipeline status --batch-id editor-one-2026-09-09-01
-```
+Version 0.2 still trusts the editor's confirmation and does not automatically recheck the revised video.
 
 ## Record improvements privately
 
-Corrections can apply to one video, the draft-review module, or the shared pipeline. For example:
+Corrections can apply to one video, one module, or the shared pipeline:
 
 ```bash
 video-pipeline feedback \
@@ -113,36 +143,28 @@ video-pipeline feedback \
   --kind incorrect \
   --issue-id ISSUE-003 \
   --scope draft-review \
-  --note "The relevant control was visible but covered by the presenter; classify this as obscured, not missing."
+  --note "The control was visible but covered by the presenter; classify it as obscured, not missing."
 ```
 
-Use `--kind missed --timestamp 92` for an issue the reviewer failed to report. Feedback remains in the private local work directory. Shared behaviour changes still require a sanitized test and pull request.
-
-## GLM command adapter
-
-If GLM is available through a local command rather than an API, configure an argument list as JSON. No shell is invoked.
-
-```bash
-export VIDEO_PIPELINE_GLM_COMMAND_JSON='["glm", "review", "--prompt", "{prompt_file}", "--output", "{output_file}"]'
-video-pipeline review ... --provider command
-```
-
-The command must write the documented issue JSON to `{output_file}`, or print it to stdout. It can read the image manifest from `{images_manifest}`.
+Production feedback stays in the private local work directory. Shared behavior changes require a sanitized fixture and pull request.
 
 ## Notification relay
 
-The relay is deliberately separate from video processing. See [docs/relay.md](docs/relay.md). It stores only batch ID, editor, counts, state, event time, and delivery result. It never receives videos, scripts, transcripts, screenshots, or reports.
+The optional relay is separate from every media module. It receives batch ID, editor, counts, state, event time and delivery result. It never receives videos, scripts, transcripts, screenshots or reports.
+
+See [docs/relay.md](docs/relay.md).
 
 ## Privacy
 
-With a cloud GLM endpoint, the raw video remains local but the prepared prompt and selected screenshots are sent to that model provider. Use `--text-only` to send text evidence without screenshots, or use the command adapter with a local model to keep all evidence on the Mac.
+A cloud agent sees only the prompt and evidence included in its task. Use `--text-only` to exclude screenshots, a local command to keep evidence on the Mac, or `--agent none` to create the evidence bundle without contacting an agent.
 
-Do not use GitHub Issues to track real production videos in this public repository.
+Do not use GitHub Issues to track real production videos. Never commit media, transcripts, screenshots, reports, private paths or credentials.
 
 ## Development
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -v
+video-conformer validate-benchmark benchmarks/conformer/ssl-domain-2026-09-10/summary.json
 ```
 
-Contributions should arrive through a branch or fork and a pull request. Shared behaviour changes must include tests. Editorial rules should be scoped to one video, one module, or the shared pipeline instead of being silently applied everywhere.
+Contributions should arrive through a branch or fork and a pull request. Each module owns its prompts, tests and sanitized fixtures. Importing one production module must not import another.

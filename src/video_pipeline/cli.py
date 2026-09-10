@@ -10,8 +10,10 @@ import webbrowser
 from . import __version__
 from .config import Settings
 from .feedback import FeedbackError, record_feedback
+from .module_registry import list_modules
 from .models import ReviewRequest
 from .relay import serve
+from .modules.draft_review.config import DraftReviewSettings
 from .modules.draft_review import run_review
 from .tracker import BatchError, mark_ready, run_batch
 
@@ -21,7 +23,13 @@ def _settings(args: argparse.Namespace) -> Settings:
 
 
 def doctor(settings: Settings) -> int:
-    claude_code = bool(shutil.which(settings.claude_code_command))
+    review_settings = DraftReviewSettings.from_core(settings)
+    agent = review_settings.agent
+    agent_available = bool(
+        agent.command
+        or shutil.which(agent.claude_code_command)
+        or agent.api_key
+    )
     checks = {
         "Python 3.11+": sys.version_info >= (3, 11),
         "FFmpeg": bool(shutil.which("ffmpeg")),
@@ -29,15 +37,15 @@ def doctor(settings: Settings) -> int:
         "whisper-cli": bool(shutil.which("whisper-cli")),
         "Swift compiler": bool(shutil.which("swiftc")),
         "Whisper model": bool(settings.whisper_model and settings.whisper_model.exists()),
-        "Claude Code / GLM provider": bool(claude_code or settings.glm_api_key or settings.glm_command),
     }
     for label, okay in checks.items():
         print(f"{'OK' if okay else 'MISSING':8} {label}")
     print(f"\nLocal work directory: {settings.work_dir}")
     if not checks["Whisper model"]:
         print("Set VIDEO_PIPELINE_WHISPER_MODEL to an existing whisper.cpp model file.")
-    if not checks["Claude Code / GLM provider"]:
-        print("Install/configure Claude Code, set the GLM API variables, or use --provider mock only for testing.")
+    print(f"{'OK' if agent_available else 'OPTIONAL':8} draft-review agent adapter")
+    if not agent_available:
+        print("No draft-review agent is configured; deterministic evidence preparation remains available with --agent none.")
     return 0 if all(checks.values()) else 1
 
 
@@ -48,14 +56,15 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("doctor", help="Check local dependencies")
+    sub.add_parser("modules", help="List independently runnable pipeline modules")
 
     review = sub.add_parser("review", help="Review one local video")
     review.add_argument("--video", required=True)
     review.add_argument("--script", required=True)
     review.add_argument("--editor", required=True, help="Editor key from the private team configuration")
     review.add_argument("--title")
-    provider_choices = ("auto", "claude-code", "glm", "command", "mock")
-    review.add_argument("--provider", default="auto", choices=provider_choices)
+    agent_choices = ("auto", "none", "claude-code", "openai-compatible", "command", "mock", "glm")
+    review.add_argument("--agent", "--provider", dest="agent", default="auto", choices=agent_choices)
     review.add_argument("--text-only", action="store_true", help="Do not send screenshots to a cloud model")
     review.add_argument("--skip-transcript", action="store_true", help=argparse.SUPPRESS)
     review.add_argument("--skip-ocr", action="store_true", help=argparse.SUPPRESS)
@@ -64,7 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     batch = sub.add_parser("batch", help="Review every video in a batch manifest")
     batch.add_argument("manifest")
-    batch.add_argument("--provider", default="auto", choices=provider_choices)
+    batch.add_argument("--agent", "--provider", dest="agent", default="auto", choices=agent_choices)
     batch.add_argument("--text-only", action="store_true")
     batch.add_argument("--skip-transcript", action="store_true", help=argparse.SUPPRESS)
     batch.add_argument("--skip-ocr", action="store_true", help=argparse.SUPPRESS)
@@ -99,22 +108,25 @@ def main(argv: list[str] | None = None) -> int:
         settings.ensure_dirs()
         if args.command == "doctor":
             return doctor(settings)
+        if args.command == "modules":
+            print(json.dumps(list_modules(), indent=2))
+            return 0
         if args.command == "review":
             video = Path(args.video).expanduser()
             script = Path(args.script).expanduser()
             request = ReviewRequest(video=video, script=script, editor=args.editor,
                                     title=args.title or video.stem)
-            result, job_dir = run_review(request, settings, provider_name=args.provider,
+            result, job_dir = run_review(request, settings, provider_name=args.agent,
                                          text_only=args.text_only, skip_transcript=args.skip_transcript,
                                          skip_ocr=args.skip_ocr, force=args.force)
             print(f"Review complete: {job_dir / 'report.html'}")
-            print(f"{len(result.issues)} findings · provider {result.provider} · model {result.model}")
+            print(f"{len(result.issues)} findings · agent {result.provider} · model {result.model}")
             if args.open_report:
                 webbrowser.open((job_dir / "report.html").as_uri())
             return 0
         if args.command == "batch":
             state, batch_path = run_batch(Path(args.manifest).expanduser(), settings,
-                                          provider_name=args.provider, text_only=args.text_only,
+                                          provider_name=args.agent, text_only=args.text_only,
                                           skip_transcript=args.skip_transcript, skip_ocr=args.skip_ocr)
             print(f"Batch status: {state['status']}")
             print(f"Checked {state['completed']} of {state['total']} · failed {state['failed']}")

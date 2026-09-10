@@ -36,7 +36,7 @@ Provider secrets and model choices remain in private per-module configuration. S
 
 ## Test and benchmark policy
 
-Each module owns unit tests and sanitized fixtures. A benchmark records which adapter, if any, produced semantic inputs; it is not globally forced online or offline. The September SSL/domain run is stored as evidence of the current conformer components, with its failed GLM attempt clearly separated from the deterministic retrieval results.
+Each module owns unit tests and sanitized fixtures. A benchmark records which adapter, if any, produced semantic inputs; it is not globally forced online or offline. The September SSL/domain run stores only its deterministic conformer-component results and records zero agent calls for those metrics.
 
 ## Compatibility
 

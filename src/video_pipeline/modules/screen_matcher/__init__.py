@@ -1,7 +1,7 @@
-"""Screen-recording retrieval module placeholder.
+"""Screen-retrieval component of the Tutorial Conformer.
 
-The historical retrieval benchmark will be promoted here after its independent
-failure-to-success benchmark packet is complete.
+The tested finder will be promoted inside ``modules.conformer`` and keeps its
+own fixtures, state evidence and regression tests.
 """
 
 STATUS = "benchmark_only"

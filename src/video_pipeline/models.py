@@ -19,7 +19,7 @@ class Issue:
     confidence: float = 0.5
     end_sec: float | None = None
     evidence_frame: str | None = None
-    source: str = "glm"
+    source: str = "agent"
     rule_version: str = "draft-review/0.1"
     issue_id: str = ""
 

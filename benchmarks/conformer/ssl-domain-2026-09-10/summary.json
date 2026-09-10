@@ -1,0 +1,47 @@
+{
+  "schema_version": "conformer-benchmark-summary/1",
+  "case_id": "ssl-domain-2026-09-10",
+  "module": "conformer",
+  "components": ["aroll-audit", "screen-matcher"],
+  "retrieval": {
+    "script_beats": 13,
+    "top1_hits": 9,
+    "top1_recall": 0.6923,
+    "top3_hits": 11,
+    "top3_recall": 0.8462,
+    "top5_hits": 12,
+    "top5_recall": 0.9231
+  },
+  "state_contrasts": {
+    "probes": 6,
+    "top1_hits": 6,
+    "top1_recall": 1.0,
+    "pairs": [
+      "healthy-domain-vs-expired-domain",
+      "valid-ssl-vs-expired-ssl",
+      "auto-renew-enabled-vs-disabled",
+      "certificate-warning-vs-nxdomain"
+    ]
+  },
+  "host_audit": {
+    "source": "finished-edit-transcript",
+    "canonical_script_tokens": 901,
+    "exactly_matched_tokens": 839,
+    "exact_script_token_recall": 0.9312,
+    "exact_script": false,
+    "raw_take_selection_tested": false
+  },
+  "agent_usage": {
+    "retrieval_run_calls": 0,
+    "retrieval_run_adapter": "none",
+    "visual_beats_source": "manual-benchmark-fixture",
+    "semantic_generation_included_in_metrics": false
+  },
+  "input_limits": [
+    "screen recordings were short topic-labelled clips, not one long raw developer recording",
+    "the two raw host recordings referenced by the editor XML were not supplied",
+    "exact raw screen boundaries and raw host take selection were not tested",
+    "no generated Final Cut timeline was tested"
+  ],
+  "decision": "partial_pass_components_only"
+}

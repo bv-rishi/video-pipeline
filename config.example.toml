@@ -5,21 +5,34 @@ whisper_model = "~/Models/ggml-base.en.bin"
 reviewer_label = "final reviewer"
 
 frame_interval_sec = 2.0
+# relay_url = "https://private-relay.example/events"
+# relay_token = ""
+
+[modules.draft_review]
 chunk_length_sec = 300
 max_images_per_chunk = 18
-max_glm_calls_per_video = 6
+max_agent_calls_per_video = 6
 
-# Default: reuse the model route already configured in Claude Code. When the
-# Claude Code aliases point to GLM, "sonnet" is resolved through that mapping.
+[modules.draft_review.agent]
+# auto checks, in order: configured command, Claude Code, compatible API,
+# then no-agent evidence preparation. Set this explicitly when desired:
+# adapter = "command"
+# adapter = "claude-code"
+# adapter = "openai-compatible"
+# adapter = "none"
+adapter = "auto"
+
+# A generic argument-array adapter can run Codex, Claude Code, GLM, a local
+# model, or any wrapper that implements docs/agent-contract.md. No shell runs.
+# command = ["my-agent-wrapper", "{request_file}", "{response_file}"]
+
+# Optional Claude Code convenience adapter. Its private user settings decide
+# which model Claude Code routes to; this repository does not require GLM.
 claude_code_command = "claude"
 claude_code_model = "sonnet"
 claude_code_max_budget_usd = 0.10
 
-# Optional direct GLM API route. This is used with --provider glm.
-glm_base_url = "https://api.z.ai/api/paas/v4"
-glm_model = "glm-4.6v"
-
-# Keep secrets in environment variables or a private copy of this file.
-# glm_api_key = ""
-# relay_url = "https://private-relay.example/events"
-# relay_token = ""
+# Optional OpenAI-compatible adapter. Keep the key in an environment variable.
+api_base_url = "https://provider.example/v1"
+api_model = "configured-model"
+# api_key = ""

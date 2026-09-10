@@ -25,6 +25,6 @@ fi
 print ""
 print "Video Pipeline is installed."
 print "Edit $config_dir/config.toml with the local Whisper model path."
-print "If Claude Code already uses GLM, the reviewer will reuse that setup automatically."
+print "Choose an optional agent adapter in config.toml, or run deterministic evidence preparation with --agent none."
 print "Then run scripts/run-batch.command and drag a private batch JSON file into the window."
 read "?Press Return to close."

@@ -1,5 +1,7 @@
 # Local-first video pipeline design
 
+> Historical 0.1 design. Model-bound configuration in this document is superseded by `2026-09-10-independent-modules-design.md`. GLM remains a supported editor choice, not a shared pipeline dependency.
+
 ## Goal
 
 Give a small editing team a reviewer they can run on their own Macs before they hand final videos to the configured final reviewer. Reduce review time, video uploads, repeated media processing, and unnecessary model calls.
